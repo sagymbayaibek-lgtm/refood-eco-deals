@@ -3,8 +3,9 @@ import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { 
   ShoppingBag, Heart, Clock, User, Bell, Leaf, Star, 
   MapPin, Filter, Search, TrendingUp, Package, Settings,
-  ChevronRight, X, Minus, Plus, Check, Download, RotateCcw, CreditCard
+  ChevronRight, X, Minus, Plus, Check, Download, RotateCcw, CreditCard, QrCode
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -37,6 +38,9 @@ const CustomerDashboard = () => {
   const [reviewDialog, setReviewDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
+
+  // QR dialog
+  const [qrDialog, setQrDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
 
   // Profile edit
   const [editProfile, setEditProfile] = useState(false);
@@ -92,6 +96,7 @@ Total: $${order.totalPrice.toFixed(2)}
 Payment: ${order.paymentMethod === 'kaspi' ? 'Kaspi Pay' : 'Bank Card'}
 Status: ${order.paymentStatus}
 Pickup: ${order.pickupTime}
+QR Code: ${order.qrCode}
 
 CO₂ Saved: ${order.co2Saved.toFixed(1)} kg
 =============================
@@ -404,6 +409,15 @@ CO₂ Saved: ${order.co2Saved.toFixed(1)} kg
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => setQrDialog({ open: true, order })}
+                          className="gap-2"
+                        >
+                          <QrCode className="w-4 h-4" />
+                          QR Code
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDownloadReceipt(order)}
                           className="gap-2"
                         >
@@ -544,6 +558,27 @@ CO₂ Saved: ${order.co2Saved.toFixed(1)} kg
 
 
 
+
+        {/* QR Code Dialog */}
+        <Dialog open={qrDialog.open} onOpenChange={(open) => setQrDialog({ ...qrDialog, open })}>
+          <DialogContent className="sm:max-w-sm text-center">
+            <DialogHeader>
+              <DialogTitle>Pickup QR Code</DialogTitle>
+            </DialogHeader>
+            {qrDialog.order && (
+              <div className="space-y-4 flex flex-col items-center">
+                <p className="text-sm text-muted-foreground">Show this to business staff when picking up your order</p>
+                <QRCodeSVG value={qrDialog.order.qrCode} size={200} level="H" />
+                <p className="text-xs text-muted-foreground font-mono">{qrDialog.order.qrCode}</p>
+                <div className="text-sm">
+                  <p className="font-semibold">{qrDialog.order.dealTitle}</p>
+                  <p className="text-muted-foreground">{qrDialog.order.businessName} • Qty: {qrDialog.order.quantity}</p>
+                  <p className="text-muted-foreground">Pickup: {qrDialog.order.pickupTime}</p>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Review Dialog */}
         <Dialog open={reviewDialog.open} onOpenChange={(open) => setReviewDialog({ ...reviewDialog, open })}>
