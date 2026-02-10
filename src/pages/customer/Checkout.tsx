@@ -4,6 +4,7 @@ import {
   ArrowLeft, ArrowRight, CreditCard, Check, Clock, Leaf,
   ShieldCheck, Loader2, AlertCircle, Smartphone, MapPin
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ const Checkout = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
+  const [orderQrCode, setOrderQrCode] = useState('');
 
   // Card form state
   const [cardNumber, setCardNumber] = useState('');
@@ -65,6 +67,8 @@ const Checkout = () => {
     const success = Math.random() > 0.1;
 
     if (success) {
+      const qrCode = `REFOOD-${Date.now()}-${deal.id}-${quantity}`;
+      setOrderQrCode(qrCode);
       addOrder(deal.id, quantity, paymentMethod);
       setOrderComplete(true);
       setStep(3);
@@ -365,6 +369,18 @@ const Checkout = () => {
                   <span className="font-medium text-eco">You saved {co2.toFixed(1)} kg CO₂ with this purchase! 🎉</span>
                 </div>
               </Card>
+
+              {/* QR Code */}
+              {orderQrCode && (
+                <Card className="p-6 text-center">
+                  <h3 className="font-semibold mb-2">Your Pickup QR Code</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Show this to the business staff when you pick up your order</p>
+                  <div className="flex justify-center">
+                    <QRCodeSVG value={orderQrCode} size={180} level="H" />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3 font-mono">{orderQrCode}</p>
+                </Card>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Button onClick={() => navigate('/customer/dashboard')} className="btn-bounce gap-2">

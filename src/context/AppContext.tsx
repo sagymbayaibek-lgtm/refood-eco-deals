@@ -57,6 +57,7 @@ export interface Order {
   pickupTime: string;
   createdAt: string;
   co2Saved: number;
+  qrCode: string;
 }
 
 export interface Review {
@@ -432,6 +433,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       pickupTime: `${deal.pickupStart} - ${deal.pickupEnd}`,
       createdAt: new Date().toISOString(),
       co2Saved: deal.co2Saved * quantity,
+      qrCode: `REFOOD-${Date.now()}-${dealId}-${quantity}`,
     };
 
     setOrders(prev => [newOrder, ...prev]);
