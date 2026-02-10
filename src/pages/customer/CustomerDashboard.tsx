@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { 
   ShoppingBag, Heart, Clock, User, Bell, Leaf, Star, 
   MapPin, Filter, Search, TrendingUp, Package, Settings,
-  ChevronRight, X, Minus, Plus, Check
+  ChevronRight, X, Minus, Plus, Check, Download, RotateCcw, CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,8 +19,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Layout } from '@/components/layout/Layout';
 
 const CustomerDashboard = () => {
-  const { user, deals, getCustomerOrders, getFavoriteDeals, addOrder, addReview, updateUser } = useApp();
+  const { user, deals, getCustomerOrders, getFavoriteDeals, addOrder, addReview, updateUser, requestRefund } = useApp();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // State
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,9 +30,8 @@ const CustomerDashboard = () => {
   const [sortBy, setSortBy] = useState<string>('distance');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Purchase dialog
-  const [purchaseDialog, setPurchaseDialog] = useState<{ open: boolean; deal: Deal | null }>({ open: false, deal: null });
-  const [purchaseQuantity, setPurchaseQuantity] = useState(1);
+
+
 
   // Review dialog
   const [reviewDialog, setReviewDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
@@ -74,19 +74,46 @@ const CustomerDashboard = () => {
     });
 
   const handlePurchase = (deal: Deal) => {
-    setPurchaseDialog({ open: true, deal });
-    setPurchaseQuantity(1);
+    navigate(`/customer/checkout?dealId=${deal.id}&qty=1`);
   };
 
-  const confirmPurchase = () => {
-    if (purchaseDialog.deal) {
-      addOrder(purchaseDialog.deal.id, purchaseQuantity);
-      toast({
-        title: 'Order placed!',
-        description: `You've reserved ${purchaseQuantity}x ${purchaseDialog.deal.title}`,
-      });
-      setPurchaseDialog({ open: false, deal: null });
-    }
+  const handleDownloadReceipt = (order: Order) => {
+    const receipt = `
+=============================
+       REFOOD RECEIPT
+=============================
+Order #${order.id}
+Date: ${new Date(order.createdAt).toLocaleDateString()}
+
+${order.dealTitle}
+Business: ${order.businessName}
+Quantity: ${order.quantity}
+Total: $${order.totalPrice.toFixed(2)}
+Payment: ${order.paymentMethod === 'kaspi' ? 'Kaspi Pay' : 'Bank Card'}
+Status: ${order.paymentStatus}
+Pickup: ${order.pickupTime}
+
+CO₂ Saved: ${order.co2Saved.toFixed(1)} kg
+=============================
+    Thank you for saving food!
+=============================
+`.trim();
+
+    const blob = new Blob([receipt], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `refood-receipt-${order.id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRefund = (order: Order) => {
+    requestRefund(order.id);
+    toast({
+      title: 'Refund Requested',
+      description: 'Your refund request has been submitted and is being processed.',
+    });
   };
 
   const handleReview = (order: Order) => {
@@ -336,17 +363,33 @@ const CustomerDashboard = () => {
                               <h3 className="font-semibold">{order.dealTitle}</h3>
                               <p className="text-sm text-muted-foreground">{order.businessName}</p>
                             </div>
-                            <Badge
-                              variant={order.status === 'completed' ? 'default' : 'secondary'}
-                              className={order.status === 'completed' ? 'bg-eco text-eco-foreground' : ''}
-                            >
-                              {order.status}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge
+                                variant={order.status === 'completed' ? 'default' : 'secondary'}
+                                className={order.status === 'completed' ? 'bg-eco text-eco-foreground' : ''}
+                              >
+                                {order.status}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  order.paymentStatus === 'paid' ? 'border-eco/50 text-eco' :
+                                  order.paymentStatus === 'refund_requested' ? 'border-yellow-500/50 text-yellow-600' :
+                                  order.paymentStatus === 'refunded' ? 'border-muted-foreground/50 text-muted-foreground' :
+                                  'border-destructive/50 text-destructive'
+                                }
+                              >
+                                <CreditCard className="w-3 h-3 mr-1" />
+                                {order.paymentStatus === 'refund_requested' ? 'Refund Pending' : order.paymentStatus}
+                              </Badge>
+                            </div>
                           </div>
                           <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                             <span>Qty: {order.quantity}</span>
                             <span>•</span>
                             <span>${order.totalPrice.toFixed(2)}</span>
+                            <span>•</span>
+                            <span className="capitalize">{order.paymentMethod === 'kaspi' ? 'Kaspi Pay' : 'Card'}</span>
                             <span>•</span>
                             <span>Pickup: {order.pickupTime}</span>
                           </div>
@@ -357,8 +400,28 @@ const CustomerDashboard = () => {
                           </div>
                         </div>
                       </div>
-                      {order.status === 'completed' && (
-                        <div className="mt-4 pt-4 border-t border-border">
+                      <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadReceipt(order)}
+                          className="gap-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          Receipt
+                        </Button>
+                        {order.paymentStatus === 'paid' && order.status !== 'completed' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRefund(order)}
+                            className="gap-2 text-destructive hover:text-destructive"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            Request Refund
+                          </Button>
+                        )}
+                        {order.status === 'completed' && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -368,8 +431,8 @@ const CustomerDashboard = () => {
                             <Star className="w-4 h-4" />
                             Leave Review
                           </Button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </Card>
                   ))}
                 </div>
@@ -479,83 +542,8 @@ const CustomerDashboard = () => {
           </Tabs>
         </div>
 
-        {/* Purchase Dialog */}
-        <Dialog open={purchaseDialog.open} onOpenChange={(open) => setPurchaseDialog({ ...purchaseDialog, open })}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Reserve Deal</DialogTitle>
-            </DialogHeader>
-            {purchaseDialog.deal && (
-              <div className="space-y-4">
-                <div className="flex gap-4">
-                  <img
-                    src={purchaseDialog.deal.image}
-                    alt={purchaseDialog.deal.title}
-                    className="w-24 h-24 rounded-lg object-cover"
-                  />
-                  <div>
-                    <h3 className="font-semibold">{purchaseDialog.deal.title}</h3>
-                    <p className="text-sm text-muted-foreground">{purchaseDialog.deal.businessName}</p>
-                    <p className="text-lg font-bold text-primary mt-2">
-                      ${purchaseDialog.deal.discountPrice.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
 
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Quantity</label>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPurchaseQuantity(Math.max(1, purchaseQuantity - 1))}
-                      disabled={purchaseQuantity <= 1}
-                    >
-                      <Minus className="w-4 h-4" />
-                    </Button>
-                    <span className="text-xl font-semibold w-8 text-center">{purchaseQuantity}</span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPurchaseQuantity(Math.min(purchaseDialog.deal!.quantity, purchaseQuantity + 1))}
-                      disabled={purchaseQuantity >= purchaseDialog.deal.quantity}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      ({purchaseDialog.deal.quantity} available)
-                    </span>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2 text-sm">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span>Pickup: {purchaseDialog.deal.pickupStart} - {purchaseDialog.deal.pickupEnd}</span>
-                </div>
-
-                <div className="pt-4 border-t border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">Total</span>
-                    <span className="text-xl font-bold text-primary">
-                      ${(purchaseDialog.deal.discountPrice * purchaseQuantity).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="eco-badge text-xs">
-                    🌱 Saves {(purchaseDialog.deal.co2Saved * purchaseQuantity).toFixed(1)} kg CO₂
-                  </div>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setPurchaseDialog({ open: false, deal: null })}>
-                Cancel
-              </Button>
-              <Button onClick={confirmPurchase} className="btn-bounce">
-                Confirm Reservation
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Review Dialog */}
         <Dialog open={reviewDialog.open} onOpenChange={(open) => setReviewDialog({ ...reviewDialog, open })}>
