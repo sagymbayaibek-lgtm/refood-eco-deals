@@ -50,7 +50,10 @@ export interface Order {
   businessName: string;
   quantity: number;
   totalPrice: number;
+  originalTotal: number;
   status: 'pending' | 'confirmed' | 'ready' | 'completed' | 'cancelled';
+  paymentStatus: 'pending' | 'paid' | 'failed' | 'refund_requested' | 'refunded';
+  paymentMethod: 'kaspi' | 'card' | '';
   pickupTime: string;
   createdAt: string;
   co2Saved: number;
@@ -81,8 +84,9 @@ interface AppContextType {
   addDeal: (deal: Omit<Deal, 'id' | 'businessId' | 'businessName' | 'businessLogo' | 'rating' | 'reviewCount' | 'createdAt'>) => void;
   updateDeal: (id: string, data: Partial<Deal>) => void;
   deleteDeal: (id: string) => void;
-  addOrder: (dealId: string, quantity: number) => void;
+  addOrder: (dealId: string, quantity: number, paymentMethod: 'kaspi' | 'card') => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
+  requestRefund: (orderId: string) => void;
   addReview: (dealId: string, rating: number, comment: string) => void;
   toggleFavorite: (dealId: string) => void;
   getBusinessDeals: () => Deal[];
@@ -404,7 +408,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setDeals(prev => prev.filter(d => d.id !== id));
   };
 
-  const addOrder = (dealId: string, quantity: number) => {
+  const addOrder = (dealId: string, quantity: number, paymentMethod: 'kaspi' | 'card' = 'card') => {
     if (!user || user.role !== 'customer') return;
 
     const deal = deals.find(d => d.id === dealId);
@@ -421,7 +425,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       businessName: deal.businessName,
       quantity,
       totalPrice: deal.discountPrice * quantity,
-      status: 'pending',
+      originalTotal: deal.originalPrice * quantity,
+      status: 'confirmed',
+      paymentStatus: 'paid',
+      paymentMethod,
       pickupTime: `${deal.pickupStart} - ${deal.pickupEnd}`,
       createdAt: new Date().toISOString(),
       co2Saved: deal.co2Saved * quantity,
@@ -439,6 +446,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateOrderStatus = (orderId: string, status: Order['status']) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+  };
+
+  const requestRefund = (orderId: string) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, paymentStatus: 'refund_requested' as const } : o));
   };
 
   const addReview = (dealId: string, rating: number, comment: string) => {
@@ -520,6 +531,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         deleteDeal,
         addOrder,
         updateOrderStatus,
+        requestRefund,
         addReview,
         toggleFavorite,
         getBusinessDeals,
